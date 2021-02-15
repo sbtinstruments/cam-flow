@@ -4,6 +4,85 @@ from itertools import product
 import json
 import base64
 
+class Stack:
+    """Keep track of a collection of flow cells
+    """
+
+    rows = "ABCDEFGHIJKL"
+    columns = list(range(1, 9))
+    always_missing = [
+        ("A", 1),
+        ("A", 2),
+        ("B", 1),
+        ("A", 7),
+        ("A", 8),
+        ("B", 8),
+        ("K", 1),
+        ("L", 1),
+        ("L", 2),
+        ("K", 8),
+        ("L", 7),
+        ("L", 8),
+    ]
+
+    def __init__(self, name:str):
+        self.name = name
+        self._base_path = pathlib.Path.cwd() / f"{self.name}"
+
+        self.cells = {
+            (row, column): FlowCell(self, f"{row}{column}")
+            for row, column in product(self.rows, self.columns)
+        }
+
+        for coordinate in self.always_missing:
+            self.cells[coordinate].status = FlowCell.STATUS.OUT_OF_SPEC
+
+    def on(self):
+        for cell in self.cells.values():
+            cell.status = FlowCell.STATUS.IN_PROGRESS
+        for coordinate in self.always_missing:
+            self.cells[coordinate].status = FlowCell.STATUS.OUT_OF_SPEC
+    def off(self):
+        for cell in self.cells.values():
+            cell.status = FlowCell.STATUS.OUT_OF_SPEC
+
+    @property
+    def _state_matrix(self):
+        """Represent the stack as a string.
+
+        This is for debugging and can be safely deleted.
+        """
+        cell_reps = {
+            FlowCell.STATUS.OUT_OF_SPEC: "X",
+            FlowCell.STATUS.IN_PROGRESS: ".",
+            FlowCell.STATUS.DONE: "O",
+        }
+
+        rep = "   " + " ".join([str(column) for column in self.columns]) + "\n"
+        for row in Stack.rows:
+            row_rep = f"{row} "
+            for column in Stack.columns:
+                cell_state = self.cells[row, column].status
+                row_rep += f" {cell_reps[cell_state]}"
+
+            rep += row_rep + "\n"
+        return rep
+
+    @property
+    def label_list(self):
+        """Represent the stack as a list of flow-cell labels
+        """
+        return [cell.label for cell in self.cells.values() if not cell.status == FlowCell.STATUS.OUT_OF_SPEC]
+
+
+    def mkdirs(self):
+        """Create a folder for every flow cell that is not out-of-spec
+        """
+        for cell in self.cells.values():
+            if cell.status == FlowCell.STATUS.OUT_OF_SPEC:
+                continue
+            cell.mkdir()
+
 
 class FlowCell:
     """Keep track of the state of a single flow cell.
@@ -24,7 +103,7 @@ class FlowCell:
         "Is there damage on the inner channel boundary or is it not intact?": False,
     }
 
-    def __init__(self, stack, grid_position, model="Q"):
+    def __init__(self, stack:Stack, grid_position:str, model:str="Q") -> None:
         self.stack = stack
         self.grid_position = grid_position
         self.model = model
@@ -103,81 +182,3 @@ class FlowCell:
         }
 
 
-class Stack:
-    """Keep track of a collection of flow cells
-    """
-
-    rows = "ABCDEFGHIJKL"
-    columns = list(range(1, 9))
-    always_missing = [
-        ("A", 1),
-        ("A", 2),
-        ("B", 1),
-        ("A", 7),
-        ("A", 8),
-        ("B", 8),
-        ("K", 1),
-        ("L", 1),
-        ("L", 2),
-        ("K", 8),
-        ("L", 7),
-        ("L", 8),
-    ]
-
-    def __init__(self, name):
-        self.name = name
-        self._base_path = pathlib.Path.cwd() / f"{self.name}"
-
-        self.cells = {
-            (row, column): FlowCell(self, f"{row}{column}")
-            for row, column in product(self.rows, self.columns)
-        }
-
-        for coordinate in self.always_missing:
-            self.cells[coordinate].status = FlowCell.STATUS.OUT_OF_SPEC
-
-    def on(self):
-        for cell in self.cells.values():
-            cell.status = FlowCell.STATUS.IN_PROGRESS
-        for coordinate in self.always_missing:
-            self.cells[coordinate].status = FlowCell.STATUS.OUT_OF_SPEC
-    def off(self):
-        for cell in self.cells.values():
-            cell.status = FlowCell.STATUS.OUT_OF_SPEC
-
-    @property
-    def _state_matrix(self):
-        """Represent the stack as a string.
-
-        This is for debugging and can be safely deleted.
-        """
-        cell_reps = {
-            FlowCell.STATUS.OUT_OF_SPEC: "X",
-            FlowCell.STATUS.IN_PROGRESS: ".",
-            FlowCell.STATUS.DONE: "O",
-        }
-
-        rep = "   " + " ".join([str(column) for column in self.columns]) + "\n"
-        for row in Stack.rows:
-            row_rep = f"{row} "
-            for column in Stack.columns:
-                cell_state = self.cells[row, column].status
-                row_rep += f" {cell_reps[cell_state]}"
-
-            rep += row_rep + "\n"
-        return rep
-
-    @property
-    def label_list(self):
-        """Represent the stack as a list of flow-cell labels
-        """
-        return [cell.label for cell in self.cells.values() if not cell.status == FlowCell.STATUS.OUT_OF_SPEC]
-
-
-    def mkdirs(self):
-        """Create a folder for every flow cell that is not out-of-spec
-        """
-        for cell in self.cells.values():
-            if cell.status == FlowCell.STATUS.OUT_OF_SPEC:
-                continue
-            cell.mkdir()
