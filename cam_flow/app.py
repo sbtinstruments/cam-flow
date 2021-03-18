@@ -1,5 +1,9 @@
 import pprint
+import asyncio
+import aiohttp
+from kivy.app import async_runTouchApp
 
+from kivy.logger import Logger
 import pyperclip
 from kivy.app import App
 from kivy.clock import Clock
@@ -14,7 +18,10 @@ from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.widget import Widget
 
 from cam_flow import backend
+from validation_component import uploadPopup
+from loginPopup import LoginPopup
 
+Logger.debug('Running app.')
 
 def make_check(question, default, callback):
     """Make labels and checkboxes
@@ -126,6 +133,8 @@ class CamApp(App):
 
         Window.size = (1400, 500)
 
+        self.popup = LoginPopup() #uploadPopup()
+
         return self.main
     
 
@@ -159,12 +168,12 @@ class CamApp(App):
 
     def _on_keyboard_down(self, *args):
         keyboard, (scancode, char), point, modifiers = args
-
+        print('_on_keyboard_down')
         try:
             char = self._keyboard.keycode_to_string(scancode)
         except AttributeError:
             return True
-
+        print('_on_keyboard_down: ' + char)
         if char == "up":
             self.move_focus(dy=-1)
         elif char == "down":
@@ -175,6 +184,10 @@ class CamApp(App):
             self.move_focus(dx=1)
         elif char == "q" and "ctrl" in modifiers:
             self.stop()
+        elif char == "u" and "ctrl" in modifiers:
+            self.popup.open()
+        elif char == "escape":
+            self.popup.dismiss()
         elif char == "p" and "ctrl" in modifiers:
             self.print_labels()
         elif char == "w" and "ctrl" in modifiers:
@@ -277,6 +290,12 @@ class CamApp(App):
 
         return f
 
-
 def main():
-    CamApp().run()
+    asyncio.run(
+        CamApp().async_run(async_lib='asyncio')
+    )
+
+if __name__ == '__main__':
+    asyncio.run(
+        CamApp().async_run(async_lib='asyncio')
+    )
