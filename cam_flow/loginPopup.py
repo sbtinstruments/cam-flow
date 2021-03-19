@@ -20,11 +20,10 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.addHandler(logging.StreamHandler(sys.stdout))
 
-HOST = 'http://192.168.92.66:3000/'
 STACK = '1A211'
 _STACK = '1B111'
 
-# HOST = 'https://qc-api.sbtinstruments.com/'
+HOST = 'https://qc-api.sbtinstruments.com/'
 spacer = (50,50)
 
 labelProps = {
@@ -199,8 +198,8 @@ class LoginPopup(Popup):
         print("HERE2")
         _LOGGER.debug("Started")
         auth = None
-        # TODO: remove after dev
-        jar = aiohttp.CookieJar(unsafe=True)
+        # NOTE: unsafe jar dev ONLY
+        # jar = aiohttp.CookieJar(unsafe=True)
         async with aiohttp.ClientSession(cookie_jar=jar) as session:
             response = await logMeIn(session,{"user_name": self.UserName.text,"password": self.UserPw.text})
             try:
