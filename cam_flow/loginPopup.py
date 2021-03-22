@@ -197,7 +197,6 @@ class LoginPopup(Popup):
         
 
     async def async_login(self):
-        print("HERE2")
         _LOGGER.debug("Started")
         auth = None
         # NOTE: unsafe jar dev ONLY
