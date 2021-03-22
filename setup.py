@@ -3,6 +3,7 @@ from setuptools import setup, find_packages
 reqs = [
     "kivy",
     "pyperclip",
+    "aiohttp"
 ]
 
 setup(

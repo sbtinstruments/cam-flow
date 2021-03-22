@@ -6,13 +6,14 @@ from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.progressbar import ProgressBar
+from cam_flow import my_text_progbar
+
 
 import json
 import pathlib
 import os
 import base64
 import logging
-import progbar
 import sys
 import asyncio
 
@@ -20,7 +21,6 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.addHandler(logging.StreamHandler(sys.stdout))
 
-STACK = '1A211'
 _STACK = '1B111'
 
 HOST = 'https://qc-api.sbtinstruments.com/'
@@ -54,10 +54,6 @@ def _is_visual(x):
         return True
     return False
 
-def _is_my_stack(x):
-    if _STACK in x['stack_full_id']:
-        return True
-    return False
 
 def _get_pos(x):
     return x['stack_position']
@@ -131,7 +127,7 @@ def read_images(path,conf:dict):
 
 class LoginPopup(Popup):
     """Log in interface with upload"""
-    def __init__(self):
+    def __init__(self,stack_name):
         super(LoginPopup, self).__init__()
         self.title = 'Upload visual QC images'
         self.size = (250, 400)
@@ -156,7 +152,7 @@ class LoginPopup(Popup):
             **textInputProps
         )
 
-    
+        self.stack_name = stack_name
         self.logInButton = Button(text="Log in", on_press=self._logIn, disabled=False, **buttonProps)
         
 
@@ -184,6 +180,12 @@ class LoginPopup(Popup):
 
     def on_open(self):
         self.UserName.focus = True
+
+    
+    def _is_my_stack(self, x):
+        if self.stack_name in x['stack_full_id']:
+            return True
+        return False
 
     def _logIn(self, args):
         """Get authetication from server."""
@@ -214,9 +216,9 @@ class LoginPopup(Popup):
 
             conf = get_file2json_config()
 
-            local_dir_list = get_flowcell_list(STACK)
+            local_dir_list = get_flowcell_list(self.stack_name)
             db_stack_id_list = await getStackID(session)
-            db_stack_id = list(filter(_is_my_stack,db_stack_id_list))
+            db_stack_id = list(filter(self._is_my_stack,db_stack_id_list))
             if len(db_stack_id) == 0:
                 print("This stack does not exist in the QC system. First create it via the online interface.")
                 return
@@ -226,7 +228,7 @@ class LoginPopup(Popup):
             flow_cell_list = await getFlowcellIdFromDb(session,db_stack_id)
 
             
-            for sub_dir in progbar.progressBar(local_dir_list, prefix='Progress:',suffix = 'Complete', length = 50):
+            for sub_dir in my_text_progbar.progressBar(local_dir_list, prefix='Progress:',suffix = 'Complete', length = 50):
                 if sub_dir[-3:-1] not in map(_get_pos, flow_cell_list):
                     out_info[sub_dir[-3:-1]] = "Not found."
                     _LOGGER.info("%s not found.",sub_dir[-3:-1])
@@ -234,7 +236,7 @@ class LoginPopup(Popup):
                 # tmp copy of report
                 out_info[sub_dir[-3:-1]] = {}
                 tmp_rep = json_data
-                p = pathlib.Path.cwd()/ STACK / sub_dir
+                p = pathlib.Path.cwd()/ self.stack_name / sub_dir
                 tmp_img = read_images(p, conf)
                 for (k,v) in tmp_img.items():
                     out_info[sub_dir[-3:-1]][k] = "OK" if len(v) > 10 else "FAILED"

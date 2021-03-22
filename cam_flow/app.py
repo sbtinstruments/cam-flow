@@ -18,7 +18,7 @@ from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.widget import Widget
 
 from cam_flow import backend
-from loginPopup import LoginPopup
+from cam_flow import loginPopup
 
 Logger.debug('Running app.')
 
@@ -132,7 +132,7 @@ class CamApp(App):
 
         Window.size = (1400, 500)
 
-        self.popup = LoginPopup()
+        self.popup = loginPopup.LoginPopup(self.stack.name)
 
         return self.main
     
