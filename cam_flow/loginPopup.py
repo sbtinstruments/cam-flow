@@ -202,7 +202,8 @@ class LoginPopup(Popup):
         auth = None
         # NOTE: unsafe jar dev ONLY
         # jar = aiohttp.CookieJar(unsafe=True)
-        async with aiohttp.ClientSession(cookie_jar=jar) as session:
+        # async with aiohttp.ClientSession(cookie_jar=jar) as session:
+        async with aiohttp.ClientSession() as session:
             response = await logMeIn(session,{"user_name": self.UserName.text,"password": self.UserPw.text})
             try:
                 user_id = response["id"]

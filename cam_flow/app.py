@@ -167,12 +167,10 @@ class CamApp(App):
 
     def _on_keyboard_down(self, *args):
         keyboard, (scancode, char), point, modifiers = args
-        print('_on_keyboard_down')
         try:
             char = self._keyboard.keycode_to_string(scancode)
         except AttributeError:
             return True
-        print('_on_keyboard_down: ' + char)
         if char == "up":
             self.move_focus(dy=-1)
         elif char == "down":
