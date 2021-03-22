@@ -132,7 +132,7 @@ class CamApp(App):
 
         Window.size = (1400, 500)
 
-        self.popup = loginPopup.LoginPopup(self.stack.name)
+        self.popup = loginPopup.LoginPopup()
 
         return self.main
     
@@ -182,6 +182,7 @@ class CamApp(App):
         elif char == "q" and "ctrl" in modifiers:
             self.stop()
         elif char == "u" and "ctrl" in modifiers:
+            self.popup.set_stack_name(self.stack_input.text)
             self.popup.open()
         elif char == "escape":
             self.popup.dismiss()

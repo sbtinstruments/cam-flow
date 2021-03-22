@@ -77,6 +77,8 @@ async def getFlowcellIdFromDb(session, stack_id:str):
 
 async def uploadReport(session, data):
     async with session.post(HOST+'reports',json=data) as resp:
+        l = await resp.json
+        print(l)
         return resp
 
 def get_report_data(json_response):
@@ -127,7 +129,7 @@ def read_images(path,conf:dict):
 
 class LoginPopup(Popup):
     """Log in interface with upload"""
-    def __init__(self,stack_name):
+    def __init__(self):
         super(LoginPopup, self).__init__()
         self.title = 'Upload visual QC images'
         self.size = (250, 400)
@@ -152,7 +154,7 @@ class LoginPopup(Popup):
             **textInputProps
         )
 
-        self.stack_name = stack_name
+        self.stack_name = None
         self.logInButton = Button(text="Log in", on_press=self._logIn, disabled=False, **buttonProps)
         
 
@@ -177,6 +179,10 @@ class LoginPopup(Popup):
         col0.add_widget(Label(size=(1,50), size_hint=(None,None)))
 
         self.content = col0
+
+    def set_stack_name(self,name):
+        self.stack_name = name
+        return
 
     def on_open(self):
         self.UserName.focus = True
@@ -208,15 +214,16 @@ class LoginPopup(Popup):
                 user_id = response["id"]
             except KeyError as exc:
                 raise KeyError("Could not retrieve authorization response.") from exc
-
+            print(user_id)
             qc_templates = await getVisualQcTempalte(session)
             json_data = get_report_data(qc_templates)       
             json_data["report"]["created_by"] = str(user_id)
             json_data["report"]["last_edited_by"] = str(user_id)
-
+            print(json_data)
             conf = get_file2json_config()
-
+            print(conf)
             local_dir_list = get_flowcell_list(self.stack_name)
+            print(local_dir_list)
             db_stack_id_list = await getStackID(session)
             db_stack_id = list(filter(self._is_my_stack,db_stack_id_list))
             if len(db_stack_id) == 0:
@@ -226,7 +233,7 @@ class LoginPopup(Popup):
             out_info = {"stack":db_stack_id[0]["stack_full_id"]}
             db_stack_id = db_stack_id[0]["id"]
             flow_cell_list = await getFlowcellIdFromDb(session,db_stack_id)
-
+            print(flow_cell_list)
             
             for sub_dir in my_text_progbar.progressBar(local_dir_list, prefix='Progress:',suffix = 'Complete', length = 50):
                 if sub_dir[-3:-1] not in map(_get_pos, flow_cell_list):
@@ -247,9 +254,9 @@ class LoginPopup(Popup):
                 with open("output.json","w") as f:
                     json.dump(tmp_rep,f)
                 res = await uploadReport(session, tmp_rep)
-                _LOGGER.debug("%s ",res.status)
+                print(res.status)
                 out_info[sub_dir[-3:-1]]["upload"] = "OK" if res.status == 200 else "FAILED"
             
 
-            _LOGGER.info(json.dumps(out_info,indent=2))
+            print(json.dumps(out_info,indent=2))
             print("\n[ DONE ]\n")
