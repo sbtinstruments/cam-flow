@@ -77,7 +77,7 @@ async def getFlowcellIdFromDb(session, stack_id:str):
 
 async def uploadReport(session, data):
     async with session.post(HOST+'reports',json=data) as resp:
-        l = await resp.json
+        l = await resp.json()
         print(l)
         return resp
 
