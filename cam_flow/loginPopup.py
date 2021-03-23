@@ -77,8 +77,7 @@ async def getFlowcellIdFromDb(session, stack_id:str):
 
 async def uploadReport(session, data):
     async with session.post(HOST+'reports',json=data) as resp:
-        l = await resp.json()
-        print(l)
+        l = await resp.text()
         return resp
 
 def get_report_data(json_response):
@@ -219,11 +218,8 @@ class LoginPopup(Popup):
             json_data = get_report_data(qc_templates)       
             json_data["report"]["created_by"] = str(user_id)
             json_data["report"]["last_edited_by"] = str(user_id)
-            print(json_data)
             conf = get_file2json_config()
-            print(conf)
             local_dir_list = get_flowcell_list(self.stack_name)
-            print(local_dir_list)
             db_stack_id_list = await getStackID(session)
             db_stack_id = list(filter(self._is_my_stack,db_stack_id_list))
             if len(db_stack_id) == 0:
@@ -233,7 +229,6 @@ class LoginPopup(Popup):
             out_info = {"stack":db_stack_id[0]["stack_full_id"]}
             db_stack_id = db_stack_id[0]["id"]
             flow_cell_list = await getFlowcellIdFromDb(session,db_stack_id)
-            print(flow_cell_list)
             
             for sub_dir in my_text_progbar.progressBar(local_dir_list, prefix='Progress:',suffix = 'Complete', length = 50):
                 if sub_dir[-3:-1] not in map(_get_pos, flow_cell_list):
