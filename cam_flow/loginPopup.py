@@ -12,7 +12,7 @@ try:
     from . import my_text_progbar
 except ImportError:
     import my_text_progbar
-    
+
 import copy
 
 
@@ -137,7 +137,6 @@ def read_images(path,conf:dict):
 class FocusInput(TextInput):
 
     def keyboard_on_key_down(self, *args):
-        _LOGGER.debug("_here")
         keyboard, (scancode, char), point, modifiers = args
         try:
             char = self._keyboard.keycode_to_string(scancode)
@@ -234,9 +233,6 @@ class LoginPopup(Popup):
         task = asyncio.create_task(self.async_login())
         # Task is leaking here.
         self.logInButton.disabled = False
-
-    def _on_dismiss(self):
-        _LOGGER.error("HERE IS THE _on_dismiss")
         
 
     async def async_login(self):
