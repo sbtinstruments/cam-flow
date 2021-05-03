@@ -3,7 +3,6 @@ import asyncio
 import aiohttp
 from kivy.app import async_runTouchApp
 
-from kivy.logger import Logger
 import pyperclip
 from kivy.app import App
 from kivy.clock import Clock
@@ -17,10 +16,21 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.widget import Widget
 
-from cam_flow import backend
-from cam_flow import loginPopup
+try:
+    from . import backend
+except ImportError:
+    import backend
 
-Logger.debug('Running app.')
+try:
+    from . import loginPopup
+except ImportError:
+    import loginPopup
+
+from kivy.logger import Logger, LOG_LEVELS
+_LOGGER = Logger
+_LOGGER.setLevel(LOG_LEVELS["debug"])
+
+_LOGGER.debug('Starting app.')
 
 def make_check(question, default, callback):
     """Make labels and checkboxes
@@ -31,18 +41,12 @@ def make_check(question, default, callback):
         shorten=True,
         text_size=(500, None),
     )
-    button = CheckBox(
-        active=default,
-        on_press=callback,
-        size_hint=(0.2, 1),
-    )
 
     row = BoxLayout(
         orientation="horizontal",
     )
     row.add_widget(txt)
-    row.add_widget(button)
-    return row, button
+    return row
 
 
 def make_path_check(img, callback):
@@ -71,9 +75,9 @@ def make_path_check(img, callback):
 class CamApp(App):
     COLOURS = {
         backend.FlowCell.STATUS.OUT_OF_SPEC: (1.0, 0.3, 0.3, 0.1),
-        backend.FlowCell.STATUS.IN_PROGRESS: (0.2, 0.2, 0.8, 0.8),
+        backend.FlowCell.STATUS.IN_PROGRESS: (1,1,1,.5),#(0.2, 0.2, 0.8, 0.8),
         backend.FlowCell.STATUS.DONE: (0.4, 1.0, 0.4, 0.8),
-        "ACTIVE": (0.4, 0.9, 0.4, 0.9),
+        "ACTIVE":(1,6,1,.5),
     }
     INITIAL_CELL = ("C", 1)
     def build(self):
@@ -90,7 +94,7 @@ class CamApp(App):
         )
         self.spacing = BoxLayout(
             orientation="vertical",
-            size_hint=(0.4, 1),
+            size_hint=(0.1, 1),
         )
 
         self.stack_input = TextInput(
@@ -99,6 +103,12 @@ class CamApp(App):
             on_text_validate=self._new_stack,
             size_hint=(1, 0.1),
         )
+        self.stack_input.cursor_color = (1,1,1,1)
+        self.stack_input.selection_color = (.5,.5,1,.2)
+        self.stack_input.foreground_color = (1,1,1,1)
+        self.stack_input.background_color = (0.2,0.2,0.2,0.8)
+        self.stack_input.halign = 'center'
+        
         self.matrix = GridLayout(
             rows=12,
             cols=8,
@@ -110,19 +120,19 @@ class CamApp(App):
 
 
         self.main = BoxLayout(spacing=0, orientation="horizontal" )
-        self.questions = BoxLayout(
+        self.instructions = BoxLayout(
             orientation="vertical",
             spacing=20,
         )
 
         self._make_matrix()
-        self._make_questions()
+        self._make_instructions()
         self.select_cell(CamApp.INITIAL_CELL)(self.cell_buttons[CamApp.INITIAL_CELL])
         self._make_paths()
 
         self.main.add_widget(self.left)
         self.main.add_widget(self.spacing)
-        self.main.add_widget(self.questions)
+        self.main.add_widget(self.instructions)
 
         self._keyboard = Window.request_keyboard(self._keyboard_closed, self.matrix, "text")
         self._keyboard.bind(on_key_down=self._on_keyboard_down)
@@ -130,9 +140,11 @@ class CamApp(App):
         updates_pr_second = 2
         Clock.schedule_interval(self.update, 1.0 / updates_pr_second)
 
-        Window.size = (1400, 500)
+        Window.size = (1000, 500)
+        Window.clearcolor = (.1, .1, .1, .5)
 
         self.popup = loginPopup.LoginPopup()
+        self.popup.bind(on_dismiss=self.popup_dissmiss)
 
         return self.main
     
@@ -164,6 +176,9 @@ class CamApp(App):
     def _keyboard_closed(self):
         self._keyboard.unbind(on_key_down=self._on_keyboard_down)
         self._keyboard = None
+    
+    def popup_dissmiss(self, *args):
+        self.stack_input.focus = True
 
     def _on_keyboard_down(self, *args):
         keyboard, (scancode, char), point, modifiers = args
@@ -186,8 +201,12 @@ class CamApp(App):
             self.popup.open()
         elif char == "escape":
             self.popup.dismiss()
+            
+            
         elif char == "p" and "ctrl" in modifiers:
             self.print_labels()
+        elif char == "l" and "ctrl" in modifiers:
+            self.stack_input.focus = True
         elif char == "w" and "ctrl" in modifiers:
             pprint.PrettyPrinter(indent=4).pprint(
                 self.active_cell.as_payload()
@@ -201,14 +220,6 @@ class CamApp(App):
                 self.stack.on()
             else:
                 self.stack.off()
-
-        elif char in ["1","2","3","4","5"]:
-            i = int(char) - 1
-            q = list(backend.FlowCell.DEFAULT_ANSWERS.keys())[i]
-            current_val = self.question_boxes[q].active
-            self.question_boxes[q].active = not current_val
-            self.active_cell.questions[q] = self.question_boxes[q].active
-            self.active_cell.dump_questions()
 
         self.update_matrix()
 
@@ -232,12 +243,21 @@ class CamApp(App):
 
         return dump
 
-    def _make_questions(self):
-        self.question_boxes = {}
-        for text, default in backend.FlowCell.DEFAULT_ANSWERS.items():
-            question, button = make_check(text, default, self.dump_callback(text))
-            self.questions.add_widget(question)
-            self.question_boxes[text] = button
+    def _make_instructions(self):
+        INSTRUCTIONS = ["Navigate with the arrow keys",
+            "Press [ctrl] + p to create file structure"
+            "Press [ctrl] + l to edit stack name",
+            "Press [ctrl] + u to login and upload reports",
+            "Press [ctrl] + w to print to debug console",
+            "Press [ctrl] + q or [Esc] to exit"]
+        for instr in INSTRUCTIONS:
+            instructions = Label(
+                text=instr,
+                max_lines=5,
+                shorten=True,
+                text_size=(500, None),
+            )
+            self.instructions.add_widget(instructions)
 
     def _make_paths(self):
         def cp(img):
@@ -251,13 +271,13 @@ class CamApp(App):
         for img in backend.FlowCell.IMAGES:
             row, path_check = make_path_check(img, cp(img))
             self.path_checks[img] = path_check
-            self.questions.add_widget(row)
+            self.instructions.add_widget(row)
 
     def _make_matrix(self):
         self.cell_buttons = {}
         for coordinate, _ in self.stack.cells.items():
             name = coordinate[0] + str(coordinate[1])
-            button = Button(text=name, on_press=self.select_cell(coordinate))
+            button = Button(text=name, on_press=self.select_cell(coordinate))#, color=(14,0.3,0.3,1)) # nice green (0,6,0,1)
             self.matrix.add_widget(button)
             self.cell_buttons[coordinate] = button
 
@@ -283,8 +303,6 @@ class CamApp(App):
                 "ACTIVE"
             ]
 
-            for question, value in self.active_cell.questions.items():
-                self.question_boxes[question].active = value
 
         return f
 

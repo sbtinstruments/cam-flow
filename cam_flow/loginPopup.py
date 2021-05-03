@@ -6,7 +6,14 @@ from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.progressbar import ProgressBar
-from cam_flow import my_text_progbar
+from kivy.logger import Logger
+from kivy.uix.behaviors.focus import FocusBehavior
+try:
+    from . import my_text_progbar
+except ImportError:
+    import my_text_progbar
+    
+import copy
 
 
 import json
@@ -18,10 +25,7 @@ import sys
 import asyncio
 
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
-_LOGGER = logging.getLogger(__name__)
-_LOGGER.addHandler(logging.StreamHandler(sys.stdout))
-
-_STACK = '1B111'
+_LOGGER = Logger
 
 HOST = 'https://qc-api.sbtinstruments.com/'
 spacer = (50,50)
@@ -60,6 +64,7 @@ def _get_pos(x):
 
 async def logMeIn(session, data):
     """Logs you in the server"""
+    _LOGGER.debug("HOST: "+HOST)
     async with session.post(HOST+'auth',data=data) as resp:
         return await resp.json()
 
@@ -107,7 +112,11 @@ def get_file2json_config():
 
 def get_flowcell_list(stack_string):
     stack_dir_path = pathlib.Path.cwd() / stack_string
-    sub_dirs = os.listdir(stack_dir_path)
+    try:
+        sub_dirs = os.listdir(stack_dir_path)
+    except FileNotFoundError as exc:
+        _LOGGER.exception(f'UPLOAD: Could not find folder {stack_string}')
+        return None
     return [x for x in sub_dirs if stack_string in x]
      
 def read_images(path,conf:dict):
@@ -119,10 +128,31 @@ def read_images(path,conf:dict):
             _LOGGER.warning("Could not match %s / %s",path,v)
             continue
         file = file[0]
+        _LOGGER.debug("loginPopup: image path - " + str(path) + "/" + file)
         with open(path / file, "rb") as image_file:
             out[k] = base64.b64encode(image_file.read()).decode("utf-8")
     
     return out
+
+class FocusInput(TextInput):
+
+    def keyboard_on_key_down(self, *args):
+        _LOGGER.debug("_here")
+        keyboard, (scancode, char), point, modifiers = args
+        try:
+            char = self._keyboard.keycode_to_string(scancode)
+        except AttributeError:
+            return True
+        if char == 'tab' and "shift" in modifiers:
+            self.prev_widget.focus = True
+        if char == 'tab':
+            self.next_widget.focus = True
+        elif char == 'enter':
+            try:
+                self._login_action()
+            except AttributeError as exc:
+                _LOGGER.exception("Login action not defined.")
+           
 
 
 
@@ -138,7 +168,7 @@ class LoginPopup(Popup):
         )
         UserNameLabel.bind(size=UserNameLabel.setter('text_size'))
         user_name = ''
-        self.UserName = TextInput(
+        self.UserName = FocusInput(
             text=user_name,
             **textInputProps
         )
@@ -147,7 +177,7 @@ class LoginPopup(Popup):
         )
         UserPwLabel.bind(size=UserPwLabel.setter('text_size'))
         password=''
-        self.UserPw = TextInput(
+        self.UserPw = FocusInput(
             text=password,
             password=True,
             **textInputProps
@@ -156,6 +186,12 @@ class LoginPopup(Popup):
         self.stack_name = None
         self.logInButton = Button(text="Log in", on_press=self._logIn, disabled=False, **buttonProps)
         
+        self.UserName.next_widget = self.UserPw
+        self.UserPw.next_widget = self.logInButton
+        self.UserPw.prev_widget = self.UserName
+        self.UserName.prev_widget = self.UserPw
+        self.UserName._login_action = self._logIn
+        self.UserPw._login_action = self._logIn
 
         row = BoxLayout(
             orientation="vertical",
@@ -185,24 +221,25 @@ class LoginPopup(Popup):
 
     def on_open(self):
         self.UserName.focus = True
-
     
     def _is_my_stack(self, x):
         if self.stack_name in x['stack_full_id']:
             return True
         return False
 
-    def _logIn(self, args):
+    def _logIn(self, *args):
         """Get authetication from server."""
         # run log in in coro
         self.logInButton.disabled = True
         task = asyncio.create_task(self.async_login())
         # Task is leaking here.
         self.logInButton.disabled = False
+
+    def _on_dismiss(self):
+        _LOGGER.error("HERE IS THE _on_dismiss")
         
 
     async def async_login(self):
-        _LOGGER.debug("Started")
         auth = None
         # NOTE: unsafe jar dev ONLY
         # jar = aiohttp.CookieJar(unsafe=True)
@@ -213,17 +250,18 @@ class LoginPopup(Popup):
                 user_id = response["id"]
             except KeyError as exc:
                 raise KeyError("Could not retrieve authorization response.") from exc
-            print(user_id)
+            _LOGGER.debug('loginPopup: userID - ' + str(user_id))
             qc_templates = await getVisualQcTempalte(session)
             json_data = get_report_data(qc_templates)       
             json_data["report"]["created_by"] = str(user_id)
             json_data["report"]["last_edited_by"] = str(user_id)
             conf = get_file2json_config()
             local_dir_list = get_flowcell_list(self.stack_name)
+            if local_dir_list is None: return
             db_stack_id_list = await getStackID(session)
             db_stack_id = list(filter(self._is_my_stack,db_stack_id_list))
             if len(db_stack_id) == 0:
-                print("This stack does not exist in the QC system. First create it via the online interface.")
+                _LOGGER.exception("UPLOAD:This stack does not exist in the QC system. First create it via the online interface.")
                 return
 
             out_info = {"stack":db_stack_id[0]["stack_full_id"]}
@@ -233,11 +271,11 @@ class LoginPopup(Popup):
             for sub_dir in my_text_progbar.progressBar(local_dir_list, prefix='Progress:',suffix = 'Complete', length = 50):
                 if sub_dir[-3:-1] not in map(_get_pos, flow_cell_list):
                     out_info[sub_dir[-3:-1]] = "Not found."
-                    _LOGGER.info("%s not found.",sub_dir[-3:-1])
+                    print("%s not found.",sub_dir[-3:-1])
                     continue
                 # tmp copy of report
                 out_info[sub_dir[-3:-1]] = {}
-                tmp_rep = json_data
+                tmp_rep = copy.deepcopy( json_data)
                 p = pathlib.Path.cwd()/ self.stack_name / sub_dir
                 tmp_img = read_images(p, conf)
                 for (k,v) in tmp_img.items():
@@ -248,10 +286,11 @@ class LoginPopup(Popup):
                 tmp_rep["subId"] = fcell["id"]
                 with open("output.json","w") as f:
                     json.dump(tmp_rep,f)
+
                 res = await uploadReport(session, tmp_rep)
-                print(res.status)
                 out_info[sub_dir[-3:-1]]["upload"] = "OK" if res.status == 200 else "FAILED"
+                del tmp_rep
             
 
-            print(json.dumps(out_info,indent=2))
-            print("\n[ DONE ]\n")
+            _LOGGER.info('UPLOAD:' + json.dumps(out_info,indent=2))
+            _LOGGER.info("UPLOAD: DONE")

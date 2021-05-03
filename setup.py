@@ -8,6 +8,7 @@ reqs = [
 
 setup(
     name="cam-flow",
+    version='1.3',
     description="Manage testing of flow cells",
     author="jkr",
     author_email="jimmy.kjaersgaard@gmail.com",
